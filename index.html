@@ -18,7 +18,7 @@
       </header>
 
       <section class="safety">
-        <strong>安全設計:</strong> 各アカウントは独立したChromeプロファイルで開きます。初回ログインは必ず公式Robloxページで自分で行います。
+        <strong>安全設計:</strong> 普段使っているChromeプロファイルを選んで開きます。初回ログインは必ず公式Robloxページで自分で行います。
       </section>
 
       <section class="toolbar">
@@ -33,8 +33,9 @@
         <div class="dialog-title"><h2>アカウントを追加</h2><button type="button" class="icon-button" data-close="account-dialog">×</button></div>
         <label>表示名<input id="name" maxlength="48" placeholder="例: Main" required /></label>
         <label>Robloxユーザー名 <span>任意</span><input id="username" maxlength="64" placeholder="例: Builderman" /></label>
+        <label>Chromeプロファイル<select id="chrome-profile"></select></label>
         <label>メモ <span>任意</span><textarea id="note" maxlength="280" placeholder="例: トレード用"></textarea></label>
-        <p class="hint">パスワードやCookieを入力する欄はありません。</p>
+        <p class="hint">既存のGoogleログイン状態も、このChromeプロファイルと一緒に使われます。パスワードやCookieを入力する欄はありません。</p>
         <div class="dialog-actions"><button type="button" class="ghost" data-close="account-dialog">キャンセル</button><button class="primary">追加する</button></div>
       </form>
     </dialog>

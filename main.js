@@ -12,8 +12,23 @@ function appDataFile() {
   return path.join(app.getPath("userData"), "accounts.json");
 }
 
-function profilesDirectory() {
-  return path.join(app.getPath("userData"), "browser-profiles");
+function chromeUserDataDirectory() {
+  return path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "User Data");
+}
+
+function loadChromeProfiles() {
+  const root = chromeUserDataDirectory();
+  const fallback = [{ directory: "Default", name: "Default" }];
+  try {
+    const localState = JSON.parse(fs.readFileSync(path.join(root, "Local State"), "utf8"));
+    const infoCache = localState?.profile?.info_cache || {};
+    const profiles = Object.entries(infoCache)
+      .filter(([directory]) => fs.existsSync(path.join(root, directory)))
+      .map(([directory, info]) => ({ directory, name: String(info?.name || directory) }));
+    return profiles.length ? profiles : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function readData() {
@@ -45,7 +60,11 @@ function sanitizeAccount(input) {
   const note = String(input?.note || "").trim();
   if (!name || name.length > 48) throw new Error("表示名は1〜48文字で入力してください。");
   if (username.length > 64 || note.length > 280) throw new Error("入力が長すぎます。");
-  return { name, username, note };
+  const chromeProfile = String(input?.chromeProfile || "Default").trim();
+  if (!chromeProfile || chromeProfile.includes("..") || /[\\/]/.test(chromeProfile)) {
+    throw new Error("Chromeプロファイルの指定が不正です。");
+  }
+  return { name, username, note, chromeProfile };
 }
 
 function createWindow() {
@@ -69,7 +88,7 @@ app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(
 
 ipcMain.handle("state:load", () => {
   const state = readData();
-  return { ...state, defaultChromePath: defaultChromePath() };
+  return { ...state, defaultChromePath: defaultChromePath(), chromeProfiles: loadChromeProfiles() };
 });
 
 ipcMain.handle("account:add", (_event, input) => {
@@ -107,13 +126,12 @@ ipcMain.handle("account:launch", (_event, id) => {
   if (!account) throw new Error("アカウントが見つかりません。");
   const browserPath = state.browserPath || defaultChromePath();
   if (!browserPath || !fs.existsSync(browserPath)) throw new Error("Chromeの場所を設定してください。");
-  const profilePath = path.join(profilesDirectory(), account.id);
-  fs.mkdirSync(profilePath, { recursive: true });
-  const child = spawn(browserPath, ["--user-data-dir=" + profilePath, "--new-window", "https://www.roblox.com/home"], {
+  const chromeProfile = account.chromeProfile || "Default";
+  const child = spawn(browserPath, ["--profile-directory=" + chromeProfile, "--new-window", "https://www.roblox.com/home"], {
     detached: true,
     stdio: "ignore",
     windowsHide: false,
   });
   child.unref();
-  return { ok: true, profilePath };
+  return { ok: true, chromeProfile };
 });

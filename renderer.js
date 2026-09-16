@@ -3,7 +3,7 @@
 const accountsElement = document.querySelector("#accounts");
 const countElement = document.querySelector("#account-count");
 const toast = document.querySelector("#toast");
-let state = { accounts: [], browserPath: "", defaultChromePath: "" };
+let state = { accounts: [], browserPath: "", defaultChromePath: "", chromeProfiles: [] };
 
 function showToast(message) {
   toast.textContent = message;
@@ -26,15 +26,20 @@ function render() {
     <article class="account"><h3>${escapeHtml(account.name)}</h3>
       ${account.username ? `<p class="username">@${escapeHtml(account.username)}</p>` : ""}
       ${account.note ? `<p class="note">${escapeHtml(account.note)}</p>` : '<p class="note">メモなし</p>'}
+      <p class="username">Chrome: ${escapeHtml(account.chromeProfile || "Default")}</p>
       <div class="card-actions"><button class="primary launch" data-launch="${account.id}">Chromeで開く</button><button class="delete" data-remove="${account.id}">削除</button></div>
     </article>`).join("");
 }
 
 async function reload() { state = await window.launcher.load(); render(); }
-document.querySelector("#open-add").addEventListener("click", () => document.querySelector("#account-dialog").showModal());
+function fillProfileSelector() {
+  const select = document.querySelector("#chrome-profile");
+  select.innerHTML = state.chromeProfiles.map((profile) => `<option value="${escapeHtml(profile.directory)}">${escapeHtml(profile.name)} (${escapeHtml(profile.directory)})</option>`).join("");
+}
+document.querySelector("#open-add").addEventListener("click", () => { fillProfileSelector(); document.querySelector("#account-dialog").showModal(); });
 document.querySelector("#open-settings").addEventListener("click", () => { document.querySelector("#browser-path").value = state.browserPath || state.defaultChromePath || ""; document.querySelector("#settings-dialog").showModal(); });
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
-document.querySelector("#account-form").addEventListener("submit", async (event) => { event.preventDefault(); try { state.accounts = await window.launcher.addAccount({ name: document.querySelector("#name").value, username: document.querySelector("#username").value, note: document.querySelector("#note").value }); event.target.reset(); document.querySelector("#account-dialog").close(); render(); showToast("アカウントを追加しました。"); } catch (error) { showToast(error.message); } });
+document.querySelector("#account-form").addEventListener("submit", async (event) => { event.preventDefault(); try { state.accounts = await window.launcher.addAccount({ name: document.querySelector("#name").value, username: document.querySelector("#username").value, note: document.querySelector("#note").value, chromeProfile: document.querySelector("#chrome-profile").value }); event.target.reset(); document.querySelector("#account-dialog").close(); render(); showToast("アカウントを追加しました。"); } catch (error) { showToast(error.message); } });
 document.querySelector("#choose-browser").addEventListener("click", async () => { const file = await window.launcher.chooseBrowser(); if (file) document.querySelector("#browser-path").value = file; });
 document.querySelector("#settings-form").addEventListener("submit", async (event) => { event.preventDefault(); try { state.browserPath = await window.launcher.setBrowser(document.querySelector("#browser-path").value); document.querySelector("#settings-dialog").close(); showToast("Chromeの場所を保存しました。"); } catch (error) { showToast(error.message); } });
 accountsElement.addEventListener("click", async (event) => { const id = event.target.dataset.launch || event.target.dataset.remove; if (!id) return; try { if (event.target.dataset.launch) { await window.launcher.launch(id); showToast("専用Chromeプロファイルを開きました。"); } else if (confirm("この一覧から削除しますか？ Chromeプロファイルは削除しません。")) { state.accounts = await window.launcher.removeAccount(id); render(); showToast("一覧から削除しました。"); } } catch (error) { showToast(error.message); } });
