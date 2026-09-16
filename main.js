@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 let window;
+const autoCaptureListeners = new Map();
 
 function appDataFile() { return path.join(app.getPath("userData"), "accounts.json"); }
 function readData() {
@@ -41,6 +42,41 @@ async function refreshAccount(account) {
   return { ...account, robloxId: String(authenticated.id), username: String(authenticated.name || account.username || ""), displayName: String(authenticated.displayName || authenticated.name || ""), avatarUrl: thumbnail?.data?.[0]?.imageUrl || "", verifiedAt: new Date().toISOString(), loginStatus: "verified", loginError: "" };
 }
 function updateAccount(id, mutate) { const data = readData(); const index = data.accounts.findIndex((account) => account.id === id); if (index < 0) throw new Error("アカウントが見つかりません。"); data.accounts[index] = mutate(data.accounts[index]); writeData(data); return data.accounts[index]; }
+
+async function setupCookieAutoCapture(accountSession, accountId, loginWindow) {
+  const previous = autoCaptureListeners.get(accountId);
+  if (previous) previous.cookies.removeListener("changed", previous.listener);
+  const listener = async (_event, cookie, _cause, removed) => {
+    if (!removed && cookie.name === ".ROBLOSECURITY" && cookie.value) {
+      try {
+        const encrypted = encryptCookie(cookie.value);
+        updateAccount(accountId, (current) => ({
+          ...current,
+          cookieEncrypted: encrypted,
+          loginStatus: "unverified",
+          loginError: ""
+        }));
+
+        const account = readData().accounts.find((item) => item.id === accountId);
+        if (account) {
+          const refreshed = await refreshAccount(account);
+          updateAccount(accountId, () => refreshed);
+          if (window && !window.isDestroyed()) window.webContents.send("account:captured", publicAccount(refreshed));
+        }
+        accountSession.cookies.removeListener("changed", listener);
+        autoCaptureListeners.delete(accountId);
+        if (loginWindow && !loginWindow.isDestroyed()) {
+          loginWindow.close();
+        }
+      } catch (err) {
+        console.error("Cookie自動保存エラー:", err);
+      }
+    }
+  };
+  autoCaptureListeners.set(accountId, { cookies: accountSession, listener });
+  accountSession.cookies.on("changed", listener);
+}
+
 async function openRobloxWindow(account, url) {
   const partition = `persist:roblox-account-${account.id}`; const accountSession = session.fromPartition(partition);
   if (account.cookieEncrypted) {
@@ -59,26 +95,36 @@ ipcMain.handle("account:add", (_event, input) => { const data = readData(); data
 ipcMain.handle("account:remove", async (_event, id) => {
   const data = readData();
   if (!data.accounts.some((account) => account.id === id)) throw new Error("アカウントが見つかりません。");
+  const listener = autoCaptureListeners.get(id);
+  if (listener) listener.cookies.removeListener("changed", listener.listener);
+  autoCaptureListeners.delete(id);
   await session.fromPartition(`persist:roblox-account-${id}`).clearStorageData({ storages: ["cookies"] });
   data.accounts = data.accounts.filter((account) => account.id !== id);
   writeData(data);
   return publicAccounts();
 });
 ipcMain.handle("account:set-cookie", (_event, id, rawCookie) => { const cookie = String(rawCookie || "").trim(); if (!cookie) throw new Error("Cookieを入力してください。"); return publicAccount(updateAccount(id, (current) => ({ ...current, cookieEncrypted: encryptCookie(cookie), loginStatus: "unverified", loginError: "" }))); });
+
 ipcMain.handle("account:login", async (_event, id) => {
   const account = readData().accounts.find((item) => item.id === id);
   if (!account) throw new Error("アカウントが見つかりません。");
   const partition = `persist:roblox-account-${account.id}`;
+  const accountSession = session.fromPartition(partition);
+
   const loginWindow = new BrowserWindow({ width: 1180, height: 800, minWidth: 800, minHeight: 600, title: `${account.name} — Roblox Login`, webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true } });
+
+  setupCookieAutoCapture(accountSession, account.id, loginWindow);
+
   await loginWindow.loadURL("https://www.roblox.com/login");
   return true;
 });
+
 ipcMain.handle("account:set-game", (_event, id, gameInput) => { const gameId = sanitizeGameId(gameInput); return publicAccount(updateAccount(id, (current) => ({ ...current, gameId }))); });
 ipcMain.handle("account:verify", async (_event, id) => {
   try { const refreshed = await refreshAccount(updateAccount(id, (current) => current)); updateAccount(id, () => refreshed); return publicAccount(refreshed); }
   catch { return publicAccount(updateAccount(id, (current) => ({ ...current, loginStatus: "failed", loginError: "ログイン確認に失敗しました。" }))); }
 });
-ipcMain.handle("account:verify-all", async () => { for (const account of readData().accounts) { if (!account.cookieEncrypted) continue; try { const refreshed = await refreshAccount(account); updateAccount(account.id, () => refreshed); } catch { updateAccount(account.id, (current) => ({ ...current, loginStatus: "failed", loginError: "ログイン確認に失敗しました。" })); } } return publicAccounts(); });
+ipcMain.handle("account:verify-all", async () => { for (const account of readData().accounts) { if (!account.cookieEncrypted && !await sessionCookie(account)) continue; try { const refreshed = await refreshAccount(account); updateAccount(account.id, () => refreshed); } catch { updateAccount(account.id, (current) => ({ ...current, loginStatus: "failed", loginError: "ログイン確認に失敗しました。" })); } } return publicAccounts(); });
 ipcMain.handle("account:open", async (_event, id) => { const account = readData().accounts.find((item) => item.id === id); if (!account) throw new Error("アカウントが見つかりません。"); await openRobloxWindow(account, "https://www.roblox.com/home"); return true; });
 ipcMain.handle("account:open-game", async (_event, id, gameInput) => { const gameId = sanitizeGameId(gameInput); if (!gameId) throw new Error("ゲームIDを入力してください。"); const account = updateAccount(id, (current) => ({ ...current, gameId })); await openRobloxWindow(account, `https://www.roblox.com/games/${gameId}`); return true; });
 ipcMain.handle("account:open-all", async (_event, gameInput) => {

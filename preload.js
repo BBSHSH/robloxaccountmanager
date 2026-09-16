@@ -14,4 +14,5 @@ contextBridge.exposeInMainWorld("launcher", {
   open: (id) => ipcRenderer.invoke("account:open", id),
   openGame: (id, gameId) => ipcRenderer.invoke("account:open-game", id, gameId),
   openAll: (gameId) => ipcRenderer.invoke("account:open-all", gameId),
+  onAccountCaptured: (callback) => ipcRenderer.on("account:captured", (_event, account) => callback(account)),
 });
