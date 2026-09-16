@@ -3,44 +3,27 @@
 const accountsElement = document.querySelector("#accounts");
 const countElement = document.querySelector("#account-count");
 const toast = document.querySelector("#toast");
-let state = { accounts: [], browserPath: "", defaultChromePath: "", chromeProfiles: [] };
+let state = { accounts: [], encryptionAvailable: false };
+let cookieAccountId = "";
 
-function showToast(message) {
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove("show"), 3200);
-}
-
-function escapeHtml(value) {
-  return String(value || "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[character]));
-}
-
+function showToast(message) { toast.textContent = message; toast.classList.add("show"); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove("show"), 3600); }
+function escapeHtml(value) { return String(value || "").replace(/[&<>"']/g, (character) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[character])); }
+function status(account) { if (!account.hasCookie) return '<span class="status missing">Cookie未登録</span>'; if (account.loginStatus === "verified") return '<span class="status verified">ログイン確認済み</span>'; if (account.loginStatus === "failed") return '<span class="status failed">確認失敗</span>'; return '<span class="status pending">未確認</span>'; }
 function render() {
   countElement.textContent = `${state.accounts.length} 件`;
-  if (!state.accounts.length) {
-    accountsElement.innerHTML = '<div class="empty">まだアカウントがありません。<br>追加後、起動したChromeで公式Robloxに手動ログインしてください。</div>';
-    return;
-  }
-  accountsElement.innerHTML = state.accounts.map((account) => `
-    <article class="account"><h3>${escapeHtml(account.name)}</h3>
-      ${account.username ? `<p class="username">@${escapeHtml(account.username)}</p>` : ""}
-      ${account.note ? `<p class="note">${escapeHtml(account.note)}</p>` : '<p class="note">メモなし</p>'}
-      <p class="username">Chrome: ${escapeHtml(account.chromeProfile || "Default")}</p>
-      <div class="card-actions"><button class="primary launch" data-launch="${account.id}">Chromeで開く</button><button class="delete" data-remove="${account.id}">削除</button></div>
-    </article>`).join("");
+  if (!state.encryptionAvailable) showToast("Windows暗号化を利用できないため、Cookie保存は無効です。");
+  if (!state.accounts.length) { accountsElement.innerHTML = '<div class="empty">まだアカウントがありません。追加後、Cookieを自分で登録してログイン確認してください。</div>'; return; }
+  accountsElement.innerHTML = state.accounts.map((account) => `<article class="account"><div class="card-top">${account.avatarUrl ? `<img class="avatar" src="${escapeHtml(account.avatarUrl)}" alt="" />` : '<div class="avatar placeholder">R</div>'}<div><h3>${escapeHtml(account.displayName || account.name)}</h3><p class="username">${account.username ? `@${escapeHtml(account.username)}` : "ユーザー名未確認"}</p>${status(account)}</div></div>${account.note ? `<p class="note">${escapeHtml(account.note)}</p>` : ""}<label class="game-label">ゲームID<input data-game="${account.id}" value="${escapeHtml(account.gameId)}" inputmode="numeric" placeholder="例: 123456789" /></label><div class="card-actions"><button class="ghost" data-cookie="${account.id}">${account.hasCookie ? "Cookieを更新" : "Cookieを登録"}</button><button class="ghost" data-verify="${account.id}">確認</button></div><div class="card-actions"><button class="primary launch" data-open="${account.id}">ホームを開く</button><button class="primary" data-game-open="${account.id}">ゲームを開く</button><button class="delete" data-remove="${account.id}">削除</button></div></article>`).join("");
 }
-
 async function reload() { state = await window.launcher.load(); render(); }
-function fillProfileSelector() {
-  const select = document.querySelector("#chrome-profile");
-  select.innerHTML = state.chromeProfiles.map((profile) => `<option value="${escapeHtml(profile.directory)}">${escapeHtml(profile.name)} (${escapeHtml(profile.directory)})</option>`).join("");
-}
-document.querySelector("#open-add").addEventListener("click", () => { fillProfileSelector(); document.querySelector("#account-dialog").showModal(); });
-document.querySelector("#open-settings").addEventListener("click", () => { document.querySelector("#browser-path").value = state.browserPath || state.defaultChromePath || ""; document.querySelector("#settings-dialog").showModal(); });
+function accountById(id) { return state.accounts.find((account) => account.id === id); }
+function gameFor(id) { return document.querySelector(`[data-game="${id}"]`)?.value || accountById(id)?.gameId || ""; }
+document.querySelector("#open-add").addEventListener("click", () => document.querySelector("#account-dialog").showModal());
 document.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => document.querySelector(`#${button.dataset.close}`).close()));
-document.querySelector("#account-form").addEventListener("submit", async (event) => { event.preventDefault(); try { state.accounts = await window.launcher.addAccount({ name: document.querySelector("#name").value, username: document.querySelector("#username").value, note: document.querySelector("#note").value, chromeProfile: document.querySelector("#chrome-profile").value }); event.target.reset(); document.querySelector("#account-dialog").close(); render(); showToast("アカウントを追加しました。"); } catch (error) { showToast(error.message); } });
-document.querySelector("#choose-browser").addEventListener("click", async () => { const file = await window.launcher.chooseBrowser(); if (file) document.querySelector("#browser-path").value = file; });
-document.querySelector("#settings-form").addEventListener("submit", async (event) => { event.preventDefault(); try { state.browserPath = await window.launcher.setBrowser(document.querySelector("#browser-path").value); document.querySelector("#settings-dialog").close(); showToast("Chromeの場所を保存しました。"); } catch (error) { showToast(error.message); } });
-accountsElement.addEventListener("click", async (event) => { const id = event.target.dataset.launch || event.target.dataset.remove; if (!id) return; try { if (event.target.dataset.launch) { await window.launcher.launch(id); showToast("専用Chromeプロファイルを開きました。"); } else if (confirm("この一覧から削除しますか？ Chromeプロファイルは削除しません。")) { state.accounts = await window.launcher.removeAccount(id); render(); showToast("一覧から削除しました。"); } } catch (error) { showToast(error.message); } });
+document.querySelector("#account-form").addEventListener("submit", async (event) => { event.preventDefault(); try { state.accounts = await window.launcher.addAccount({ name: document.querySelector("#name").value, username: document.querySelector("#username").value, note: document.querySelector("#note").value }); event.target.reset(); document.querySelector("#account-dialog").close(); render(); showToast("アカウントを追加しました。"); } catch (error) { showToast(error.message); } });
+document.querySelector("#cookie-form").addEventListener("submit", async (event) => { event.preventDefault(); try { const updated = await window.launcher.setCookie(cookieAccountId, document.querySelector("#cookie-value").value); state.accounts = state.accounts.map((account) => account.id === updated.id ? updated : account); document.querySelector("#cookie-value").value = ""; document.querySelector("#cookie-dialog").close(); render(); showToast("Cookieを暗号化して保存しました。確認を実行してください。"); } catch (error) { showToast(error.message); } });
+document.querySelector("#verify-all").addEventListener("click", async () => { showToast("ログイン状態を確認しています…"); state.accounts = await window.launcher.verifyAll(); render(); showToast("確認が完了しました。"); });
+document.querySelector("#open-all").addEventListener("click", async () => { try { await window.launcher.openAll(document.querySelector("#bulk-game").value); showToast("登録済みアカウントを開きました。"); } catch (error) { showToast(error.message); } });
+accountsElement.addEventListener("change", async (event) => { const id = event.target.dataset.game; if (!id) return; try { const updated = await window.launcher.setGame(id, event.target.value); state.accounts = state.accounts.map((account) => account.id === updated.id ? updated : account); showToast("ゲームIDを保存しました。"); } catch (error) { showToast(error.message); } });
+accountsElement.addEventListener("click", async (event) => { const target = event.target; const id = target.dataset.cookie || target.dataset.verify || target.dataset.open || target.dataset.gameOpen || target.dataset.remove; if (!id) return; try { if (target.dataset.cookie) { cookieAccountId = id; document.querySelector("#cookie-title").textContent = `${accountById(id)?.name || ""} のCookieを登録`; document.querySelector("#cookie-value").value = ""; document.querySelector("#cookie-dialog").showModal(); } else if (target.dataset.verify) { const updated = await window.launcher.verify(id); state.accounts = state.accounts.map((account) => account.id === updated.id ? updated : account); render(); showToast(updated.loginStatus === "verified" ? "ログインを確認しました。" : "ログイン確認に失敗しました。"); } else if (target.dataset.open) { await window.launcher.open(id); showToast("Robloxホームを開きました。"); } else if (target.dataset.gameOpen) { await window.launcher.openGame(id, gameFor(id)); showToast("ゲームページを開きました。"); } else if (target.dataset.remove && confirm("この一覧から削除しますか？ 保存済みCookieも削除されます。")) { state.accounts = await window.launcher.removeAccount(id); render(); showToast("アカウントを削除しました。"); } } catch (error) { showToast(error.message); } });
 reload();
