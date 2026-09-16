@@ -39,7 +39,8 @@ async function refreshAccount(account) {
   const cookie = await usableCookie(account);
   const authenticated = await robloxFetch("https://users.roblox.com/v1/users/authenticated", cookie);
   const thumbnail = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${authenticated.id}&size=150x150&format=Png&isCircular=false`).then((response) => response.ok ? response.json() : null).catch(() => null);
-  return { ...account, robloxId: String(authenticated.id), username: String(authenticated.name || account.username || ""), displayName: String(authenticated.displayName || authenticated.name || ""), avatarUrl: thumbnail?.data?.[0]?.imageUrl || "", verifiedAt: new Date().toISOString(), loginStatus: "verified", loginError: "" };
+  const displayName = String(authenticated.displayName || authenticated.name || "");
+  return { ...account, name: account.autoName ? displayName : account.name, autoName: false, robloxId: String(authenticated.id), username: String(authenticated.name || account.username || ""), displayName, avatarUrl: thumbnail?.data?.[0]?.imageUrl || "", verifiedAt: new Date().toISOString(), loginStatus: "verified", loginError: "" };
 }
 function updateAccount(id, mutate) { const data = readData(); const index = data.accounts.findIndex((account) => account.id === id); if (index < 0) throw new Error("アカウントが見つかりません。"); data.accounts[index] = mutate(data.accounts[index]); writeData(data); return data.accounts[index]; }
 
@@ -87,11 +88,35 @@ async function openRobloxWindow(account, url) {
   await accountWindow.loadURL(url);
 }
 function createWindow() { window = new BrowserWindow({ width: 1040, height: 760, minWidth: 800, minHeight: 600, backgroundColor: "#10131b", webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false } }); window.removeMenu(); window.loadFile("index.html"); }
+async function openLoginWindow(account) {
+  const partition = `persist:roblox-account-${account.id}`;
+  const accountSession = session.fromPartition(partition);
+  const loginWindow = new BrowserWindow({ width: 1180, height: 800, minWidth: 800, minHeight: 600, title: `${account.name} — Roblox Login`, webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true } });
+  loginWindow.on("closed", () => {
+    const current = readData().accounts.find((item) => item.id === account.id);
+    if (current?.autoName) {
+      const data = readData();
+      data.accounts = data.accounts.filter((item) => item.id !== account.id);
+      writeData(data);
+      if (window && !window.isDestroyed()) window.webContents.send("account:discarded", account.id);
+    }
+  });
+  setupCookieAutoCapture(accountSession, account.id, loginWindow);
+  await loginWindow.loadURL("https://www.roblox.com/login");
+}
 
 app.whenReady().then(() => { createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 ipcMain.handle("state:load", () => ({ accounts: publicAccounts(), encryptionAvailable: safeStorage.isEncryptionAvailable() }));
 ipcMain.handle("account:add", (_event, input) => { const data = readData(); data.accounts.push({ id: crypto.randomUUID(), ...sanitizeAccount(input), gameId: "", createdAt: new Date().toISOString(), loginStatus: "unverified" }); writeData(data); return publicAccounts(); });
+ipcMain.handle("account:add-and-login", async () => {
+  const data = readData();
+  const account = { id: crypto.randomUUID(), name: "ログイン中…", username: "", note: "", gameId: "", autoName: true, createdAt: new Date().toISOString(), loginStatus: "unverified" };
+  data.accounts.push(account);
+  writeData(data);
+  await openLoginWindow(account);
+  return publicAccounts();
+});
 ipcMain.handle("account:remove", async (_event, id) => {
   const data = readData();
   if (!data.accounts.some((account) => account.id === id)) throw new Error("アカウントが見つかりません。");
@@ -108,14 +133,7 @@ ipcMain.handle("account:set-cookie", (_event, id, rawCookie) => { const cookie =
 ipcMain.handle("account:login", async (_event, id) => {
   const account = readData().accounts.find((item) => item.id === id);
   if (!account) throw new Error("アカウントが見つかりません。");
-  const partition = `persist:roblox-account-${account.id}`;
-  const accountSession = session.fromPartition(partition);
-
-  const loginWindow = new BrowserWindow({ width: 1180, height: 800, minWidth: 800, minHeight: 600, title: `${account.name} — Roblox Login`, webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true } });
-
-  setupCookieAutoCapture(accountSession, account.id, loginWindow);
-
-  await loginWindow.loadURL("https://www.roblox.com/login");
+  await openLoginWindow(account);
   return true;
 });
 

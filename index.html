@@ -31,29 +31,11 @@
       <h2>アカウント</h2>
       <span id="account-count"></span>
     </div>
-    <button id="open-add" class="primary">＋ アカウントを追加</button>
+    <button id="open-add" class="primary">＋ 公式ログインを追加</button>
   </section>
 
   <section id="accounts" class="accounts" aria-live="polite"></section>
 </main>
-
-<!-- アカウント追加ダイアログ（シンプルに名前・メモだけ） -->
-<dialog id="account-dialog">
-  <form id="account-form" method="dialog">
-    <div class="dialog-title">
-      <h2>アカウントを追加</h2>
-      <button type="button" class="icon-button" data-close="account-dialog">×</button>
-    </div>
-    <label>表示名<input id="name" maxlength="48" placeholder="例: メイン垢" required /></label>
-    <label>Robloxユーザー名 <span>任意</span><input id="username" maxlength="64" placeholder="例: Builderman" /></label>
-    <label>メモ <span>任意</span><textarea id="note" maxlength="280" placeholder="例: トレード用 / サブ垢"></textarea></label>
-    <p class="hint">追加後に「公式ログイン」ボタンからログインするだけで、Cookieが自動保存されます。</p>
-    <div class="dialog-actions">
-      <button type="button" class="ghost" data-close="account-dialog">キャンセル</button>
-      <button class="primary">追加する</button>
-    </div>
-  </form>
-</dialog>
 
 <div id="toast" role="status"></div>
 <script src="renderer.js"></script>
