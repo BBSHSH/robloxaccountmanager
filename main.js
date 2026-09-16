@@ -43,7 +43,14 @@ app.whenReady().then(() => { createWindow(); app.on("activate", () => { if (Brow
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 ipcMain.handle("state:load", () => ({ accounts: publicAccounts(), encryptionAvailable: safeStorage.isEncryptionAvailable() }));
 ipcMain.handle("account:add", (_event, input) => { const data = readData(); data.accounts.push({ id: crypto.randomUUID(), ...sanitizeAccount(input), gameId: "", createdAt: new Date().toISOString(), loginStatus: "unverified" }); writeData(data); return publicAccounts(); });
-ipcMain.handle("account:remove", (_event, id) => { const data = readData(); data.accounts = data.accounts.filter((account) => account.id !== id); writeData(data); return publicAccounts(); });
+ipcMain.handle("account:remove", async (_event, id) => {
+  const data = readData();
+  if (!data.accounts.some((account) => account.id === id)) throw new Error("アカウントが見つかりません。");
+  await session.fromPartition(`persist:roblox-account-${id}`).clearStorageData({ storages: ["cookies"] });
+  data.accounts = data.accounts.filter((account) => account.id !== id);
+  writeData(data);
+  return publicAccounts();
+});
 ipcMain.handle("account:set-cookie", (_event, id, rawCookie) => { const cookie = String(rawCookie || "").trim(); if (!cookie) throw new Error("Cookieを入力してください。"); return publicAccount(updateAccount(id, (current) => ({ ...current, cookieEncrypted: encryptCookie(cookie), loginStatus: "unverified", loginError: "" }))); });
 ipcMain.handle("account:set-game", (_event, id, gameInput) => { const gameId = sanitizeGameId(gameInput); return publicAccount(updateAccount(id, (current) => ({ ...current, gameId }))); });
 ipcMain.handle("account:verify", async (_event, id) => {
