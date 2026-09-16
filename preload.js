@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("launcher", {
   addAccount: (account) => ipcRenderer.invoke("account:add", account),
   removeAccount: (id) => ipcRenderer.invoke("account:remove", id),
   setCookie: (id, cookie) => ipcRenderer.invoke("account:set-cookie", id, cookie),
+  login: (id) => ipcRenderer.invoke("account:login", id),
   setGame: (id, gameId) => ipcRenderer.invoke("account:set-game", id, gameId),
   verify: (id) => ipcRenderer.invoke("account:verify", id),
   verifyAll: () => ipcRenderer.invoke("account:verify-all"),
