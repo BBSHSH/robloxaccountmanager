@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Roblox Launcher</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">LOCAL ONLY</p>
+          <h1>Roblox Account Launcher</h1>
+          <p class="subtitle">パスワード・Cookieを保存も送信もしない、Chromeプロファイル型ランチャー。</p>
+        </div>
+        <button id="open-settings" class="ghost">Chromeの場所</button>
+      </header>
+
+      <section class="safety">
+        <strong>安全設計:</strong> 各アカウントは独立したChromeプロファイルで開きます。初回ログインは必ず公式Robloxページで自分で行います。
+      </section>
+
+      <section class="toolbar">
+        <div><h2>アカウント</h2><span id="account-count"></span></div>
+        <button id="open-add" class="primary">＋ アカウントを追加</button>
+      </section>
+      <section id="accounts" class="accounts" aria-live="polite"></section>
+    </main>
+
+    <dialog id="account-dialog">
+      <form id="account-form" method="dialog">
+        <div class="dialog-title"><h2>アカウントを追加</h2><button type="button" class="icon-button" data-close="account-dialog">×</button></div>
+        <label>表示名<input id="name" maxlength="48" placeholder="例: Main" required /></label>
+        <label>Robloxユーザー名 <span>任意</span><input id="username" maxlength="64" placeholder="例: Builderman" /></label>
+        <label>メモ <span>任意</span><textarea id="note" maxlength="280" placeholder="例: トレード用"></textarea></label>
+        <p class="hint">パスワードやCookieを入力する欄はありません。</p>
+        <div class="dialog-actions"><button type="button" class="ghost" data-close="account-dialog">キャンセル</button><button class="primary">追加する</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog">
+      <form id="settings-form" method="dialog">
+        <div class="dialog-title"><h2>Chromeの場所</h2><button type="button" class="icon-button" data-close="settings-dialog">×</button></div>
+        <label>Chrome実行ファイル<input id="browser-path" placeholder="自動検出を使う場合は空欄" /></label>
+        <div class="inline"><button id="choose-browser" type="button" class="ghost">ファイルを選択</button><span>空欄なら標準のChromeを自動検出します。</span></div>
+        <div class="dialog-actions"><button type="button" class="ghost" data-close="settings-dialog">キャンセル</button><button class="primary">保存する</button></div>
+      </form>
+    </dialog>
+    <div id="toast" role="status"></div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

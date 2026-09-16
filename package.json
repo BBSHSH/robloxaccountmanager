@@ -1,0 +1,14 @@
+{
+  "name": "roblox-local-account-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-only Roblox browser-profile launcher. It never stores passwords or cookies.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check main.js && node --check preload.js && node --check renderer.js"
+  },
+  "devDependencies": {
+    "electron": "^44.4.1"
+  }
+}
